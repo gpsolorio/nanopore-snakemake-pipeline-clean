@@ -1,0 +1,228 @@
+##############################################################################
+# Nanopore Adaptive Sequencing Pipeline — FULL-DATA CONFIG TEMPLATE
+#
+# Copy this file to configs/<your_study_name>.yml and fill in every
+# <FILL IN: ...> placeholder. This is the "full data" counterpart to the
+# mini smoke-test configs (configs/mini_data_public_2023_*.yml) -- use
+# those first to confirm the pipeline itself runs end-to-end on your
+# cluster before pointing this at real patient/sample data.
+#
+# Design notes, so you know what's safe to change freely vs. what has
+# knock-on effects elsewhere in the pipeline:
+#
+#   - Every path below (reference, GTF, BED files, BAM/POD5 index) can
+#     live ANYWHERE -- a different mount, a different filesystem, a
+#     totally different machine than the repo checkout. common.smk
+#     derives the container --bind/-v mounts generically from wherever
+#     these paths resolve, so you never need to touch workflow/ code just
+#     because your data lives somewhere unusual.
+#   - Paths that are repo-checked-in content (custom BED files, a sample
+#     sheet you're committing alongside the config) should be given
+#     REPO-RELATIVE (e.g. "resources/my_beds/promoters.bed"), not
+#     absolute -- relative paths resolve against the repo root
+#     automatically, so the same config keeps working if the repo is
+#     cloned to a different path, user, or machine.
+#   - Paths to large reference data that should NOT be duplicated per-repo
+#     (reference genome, GTF, big shared BED files) should be ABSOLUTE,
+#     pointing at wherever that data actually lives on this cluster.
+#
+# Invocation (adjust to whichever wrapper script / --profile you use):
+#   bash scripts/run_hpc.sh --configfile configs/<your_study_name>.yml -n
+##############################################################################
+
+# SITE — the only section you should need to edit to run this config at a
+# new institution. Every other account:/partition: value in this file is
+# an anchor reference back to these four lines.
+site:
+  account:       &site_account       "<FILL IN: SLURM_ACCOUNT>"        # billing/allocation account, e.g. Sherlock: a PI group name; Savio: "co_<name>"; Hoffman2: your lab's account
+  partition:     &site_partition     "<FILL IN: SLURM_PARTITION>"      # default CPU partition/QOS on this cluster
+  gpu_partition: &site_gpu_partition "<FILL IN: SLURM_GPU_PARTITION>"  # GPU partition on this cluster (only read by GPU-requesting rules below)
+  email:         &site_email         "<FILL IN: YOUR_EMAIL>"
+
+cluster:
+  email:            *site_email
+  account:          *site_account
+  profile:          gpu                # "gpu" or "cpu" -- selects which resources.call_variants sub-block (cpu:/gpu:) is used
+  container_engine: singularity         # "singularity", "apptainer", or "docker"
+
+# ============================================================================
+# Paths
+# ============================================================================
+paths:
+  inputs:
+    bam:  "<FILL IN: /path/to/your/bam_index>"    # per-barcode dirs of *.bam, built by scripts/index_ont_bam_dirs.sh (or your own indexer) -- see get_bam_paths() in common.smk for the exact lookup rules
+    pod5: "<FILL IN: /path/to/your/pod5s>"          # only read if experiment.prefer_pod5_inputs is true; key is required either way
+  outputs:
+    results:    results
+    logs:       logs
+    slurm_logs: slurm_logs
+  tools:
+    dorado_models: workflow/tools/dorado
+
+# ============================================================================
+# Annotations — reference genome + any BED/annotation files your analysis
+# rules expect. Add or remove keys here to match what your downstream
+# rules actually read (this template mirrors the the private cohort hg38 pilot's
+# reference/asd_genes/cpg_islands set -- swap the key names if your
+# analysis needs a different set of annotation files).
+# ============================================================================
+annotations:
+  "<FILL IN: genome_build_name>":                       # e.g. hg38, t2t, mm39 -- must match `genome:` below
+    reference:   "<FILL IN: /path/to/reference.fa>"    # absolute path -- can live on any mount; gets auto-bound into containers
+    asd_genes:   "<FILL IN: resources/your_beds/your_regions.bed>"   # repo-relative if checked into this repo, else absolute
+    cpg_islands: "<FILL IN: /path/to/cpg_islands.bed>"
+
+genome: "<FILL IN: genome_build_name>"   # selects the annotations block above -- must exactly match the key you filled in under annotations: above
+targets:
+  - full
+  - plots
+
+# ============================================================================
+# Experiment
+# ============================================================================
+experiment:
+  use_prebuilt_alignments: false        # true only for pre-aligned test fixtures -- false for any real dataset
+  type:                 adaptive        # "adaptive" or "nonadaptive" -- must match how these runs were actually sequenced
+  study:                "<FILL IN: your_study_name>"   # becomes the results/{study}/ subfolder name
+  prefer_pod5_inputs:   false           # true = re-basecall from POD5; false = pull existing BAMs from paths.inputs.bam
+  group_col:            "<FILL IN: e.g. Diagnosis>"    # documentation only -- dmr.group_column below is what's actually read
+
+  # --- Sample selection: pick ONE of the two approaches below -------------
+  #
+  # Option A: sample sheet (CSV or Excel) -- use this for real cohorts,
+  # especially family-structured sheets where sample IDs are spread across
+  # role columns (PRI, MTH, FTH, ...).
+  sample_sheet:
+    path:                 "<FILL IN: resources/spreadsheets/your_sheet.xlsx>"   # repo-relative recommended
+    sheet:                "<FILL IN: sheet name, or omit for the first sheet>"
+    diagnosis_col:        "<FILL IN: e.g. Diagnosis>"
+    id_col:                                        # set this for a simple one-ID-per-row sheet; leave unset/omit for a family sheet using `roles:` below
+    roles:                ["PRI"]                  # family sheet mode only -- add MTH/FTH/etc. if you want relatives processed (see restrict_role under dmr: to keep the DMR comparison proband-only)
+    skip_empty_diagnosis: true
+    diagnoses_to_run:     ["<FILL IN: group A>", "<FILL IN: group B>"]
+  #
+  # Option B: explicit barcode list -- simpler, use this for public/test
+  # datasets with no spreadsheet (delete the sample_sheet: block above if
+  # you use this instead; sample_sheet.path unset is what triggers the
+  # fallback to barcodes:/sample_groups: below).
+  # barcodes:
+  #   mode:   list
+  #   values: ["sample01", "sample02", "sample03"]
+  # sample_groups:
+  #   sample01: groupA
+  #   sample02: groupB
+  #   sample03: groupA
+
+analysis:
+  gtf_file: "<FILL IN: /path/to/genes.gtf>"
+  modules_of_interest: "<FILL IN: comma-separated WGCNA module names, e.g. turquoise,blue>"
+  genome: "<FILL IN: genome_build_name>"
+
+# ============================================================================
+# Tools
+# ============================================================================
+tools:
+  dorado:
+    model: hac
+  clair3:
+    platform:       ont
+    model_path:     r1041_e82_400bps_sup_v410
+    enable_phasing: true
+    ctg_name:       ""    # only honored when genome: mini -- ignored (--include_all_ctgs used instead) for any other genome mode
+
+# ============================================================================
+# Differentially Methylated Regions (DMRs)
+# ============================================================================
+dmr:
+  caller: dss              # "dss" (better at small n) or "dmrseq"
+  cutoff: 0.1
+  min_cpgs: 5
+  max_perms: 10
+  group_column: "<FILL IN: must match experiment.sample_sheet.diagnosis_col or a sample_groups key>"
+  group_values: ["<FILL IN: group A>", "<FILL IN: group B>"]
+  restrict_role: ""        # set to e.g. "PRI" if experiment.sample_sheet.roles includes relatives, to keep the DMR comparison proband-only
+
+# ============================================================================
+# TensorQTL
+# ============================================================================
+tensorqtl:
+  rename_samples: false
+  methylation_bed_gz: "results/dmr/03_individual_betas/DMR_individual_smoothed_methylation.bed.gz"
+  covariates_tsv:     "results/methylqtl/04_pgen/tensorqtl_covariates.txt"
+  sample_metadata_csv: ""
+  cis_window:  1000000
+  fdr:         0.05
+  seed:        123456
+  n_pcs:       1            # raise once cohort size supports more PCs -- 1 is the plink2 floor at small n
+  pca_approx_min_n: 50
+  maf_filter:  0.01
+  geno_filter: 1.0
+
+# ============================================================================
+# Resources -- START HERE WITH CONSERVATIVE ESTIMATES, THEN TUNE.
+# These values are unbenchmarked starting points, not measured for your
+# actual BAM sizes/coverage. After your first real run of each rule:
+#   sacct -j <jobid> --format=MaxRSS,Elapsed
+# and tighten mem_gb/time from there -- both under-provisioning (job gets
+# OOM-killed or times out) and heavy over-provisioning (job queues longer
+# than it needs to) waste real wall-clock time on a shared cluster.
+# ============================================================================
+resources:
+
+  _defaults: &defaults
+    account:   *site_account
+    partition: *site_partition
+
+  basecall_pod5: {<<: *defaults, mem_gb: 8, time: "00:30:00", threads: 4}
+
+  merge_bams:                     # scale up for real per-sample chunk-BAM volume
+    <<: *defaults
+    mem_gb: 32
+    time: "08:00:00"
+    threads: 16
+    gpus: 0
+
+  sort_index_bam:
+    <<: *defaults
+    mem_gb:  16
+    time:    "01:00:00"
+    threads: 8
+
+  call_variants:                  # genome-wide Clair3 is much heavier than an AR-locus/mini fixture
+    mem_gb:  64
+    time:    "12:00:00"
+    threads: 16
+    account: *site_account
+    cpu: {partition: *site_partition,     use_gpu: false, gpus: 0}
+    gpu: {partition: *site_gpu_partition, use_gpu: true,  gpus: 1}
+
+  plot_cpg_hists:   {<<: *defaults, mem_gb: 8, time: "04:00:00", threads: 4}
+  aggregate_xci_summary: {<<: *defaults, mem_gb: 8, time: "04:00:00", threads: 4}
+  plot_methylation: {<<: *defaults, mem_gb: 8, time: "04:00:00", threads: 4}
+
+  modkit_pileup:
+    account:   *site_account
+    partition: *site_partition
+    mem_gb:    32
+    time:      "04:00:00"
+    threads:   8
+
+  dmrseq_call_dmrs: {account: *site_account, partition: *site_partition, mem_gb: 16, time: "04:00:00", threads: 4}
+  dss_call_dmrs:    {account: *site_account, partition: *site_partition, mem_gb: 16, time: "04:00:00", threads: 4}
+  dss_smooth_betas: {account: *site_account, partition: *site_partition, mem_gb: 16, time: "04:00:00", threads: 4}
+  merge_vcfs:       {account: *site_account, partition: *site_partition, mem_gb: 4,  time: "02:00:00", threads: 1}
+  reheader_vcf:     {account: *site_account, partition: *site_partition, mem_gb: 4,  time: "02:00:00", threads: 1}
+  vcf_to_pgen:      {account: *site_account, partition: *site_partition, mem_gb: 4,  time: "02:00:00", threads: 1}
+  compute_pca_covariates: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "02:00:00", threads: 1}
+  wgcna_modules:    {account: *site_account, partition: *site_partition, mem_gb: 4,  time: "02:00:00", threads: 1}
+  annotate_dmr_context: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "02:00:00", threads: 1}
+  pathway_enrichment: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "02:00:00", threads: 1}
+  plot_dmr_heatmap: {account: *site_account, partition: *site_partition, mem_gb: 4,  time: "02:00:00", threads: 1}
+
+  run_tensorqtl:
+    account:   *site_account
+    partition: *site_gpu_partition
+    mem_gb:    16
+    time:      "12:00:00"
+    threads:   4
+    gpus:      1

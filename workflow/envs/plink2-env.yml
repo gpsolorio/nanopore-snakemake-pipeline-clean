@@ -1,0 +1,15 @@
+name: plink2-env
+# Linux and Intel Mac only. plink2 has native linux-64 and osx-64 builds
+# in bioconda, so it's installed directly here. PLINK2_BIN falls back to
+# the bare "plink2" command name and relies on THIS env providing it at
+# rule execution time (see common.smk::_resolve_plink2()).
+#
+# Do NOT use this file on Apple Silicon -- plink2 has no osx-arm64 build
+# and the solve will fail. Use plink2-env-arm64.yml there instead.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - pandas
+  - plink2

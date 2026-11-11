@@ -1,0 +1,27 @@
+name: dmr-annotation-env
+# Scope: DMR context annotation (annotate_dmr_context rule) only.
+#
+# Kept fully separate from the DSS/bsseq/WGCNA world -- annotatr and
+# AnnotationHub are heavy, slow-to-solve Bioconductor annotation packages
+# with no overlap in purpose or dependencies with statistical DMR testing.
+# Mixing tidyr/annotatr into a shared env with DSS/WGCNA is exactly the
+# failure mode this split avoids: a solve or dependency issue in one never
+# takes down the other.
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - r-base>=4.2
+  - r-optparse
+  - r-dplyr
+  - r-tidyr
+  - r-forcats
+  - r-stringr
+  - r-ggplot2
+  - bioconductor-rtracklayer
+  - bioconductor-genomicranges
+  - bioconductor-annotatr
+  - bioconductor-annotationhub
+  - bioconductor-txdb.hsapiens.ucsc.hg38.knowngene
+  - bioconductor-org.hs.eg.db   # annotatr's hg38 gene annotations also pull symbols from this

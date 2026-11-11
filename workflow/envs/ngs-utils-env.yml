@@ -1,0 +1,40 @@
+name: ngs-utils-env
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.10
+  # Python libraries
+  - pandas
+  - openpyxl
+  - numpy
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - pysam
+  - pyfaidx
+  - python-dateutil
+  - pytz
+  - pyyaml
+  - tqdm
+  # Bioinformatics tools
+  - samtools
+  - bcftools
+  - htslib
+  - tabix
+  - bedtools
+  - minimap2
+  - winnowmap
+  - meryl
+  - ngmlr
+  - ont-modkit
+  - ucsc-bedgraphtobigwig
+  # Utilities
+  - pigz
+  - parallel
+  - wget
+  - curl
+  - coreutils
+  - awscli

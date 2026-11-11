@@ -1,0 +1,157 @@
+##############################################################################
+# Nanopore Adaptive Sequencing Pipeline — Public Mini-Data Smoke Test
+# Hardware target: HPC / SLURM cluster with an A100 GPU partition
+# Dataset: GIAB 2023.05 public mini (HG001-HG004, AR-locus fixture)
+#
+# Requires: Snakemake 7.32.4, legacy `cluster:` profile at profiles/slurm/
+#           (repo root, not workflow/profiles/)
+#
+# Before first use on a new cluster:
+#   1. Fill in the SITE block below.
+#   2. profiles/slurm/config.yaml needs a `slurm_log_dir` default resource
+#      (used by the sbatch `mkdir -p` / --output / --error paths) --
+#      one line under default-resources:. Without it every submission
+#      fails at the mkdir step before any job runs.
+#
+# Invocation (7.32.4 uses --profile, not --workflow-profile -- that flag
+# is Snakemake 8+ only):
+#   snakemake all -p \
+#       -s workflow/snakemake/nanopore_adaptive_pipeline.smk \
+#       --configfile configs/mini_data_public_2023_hpc_a100.yml \
+#       --profile profiles/slurm \
+#       --use-conda
+##############################################################################
+
+# SITE — the only section you should need to edit to run this config at a
+# new institution. Every account:/partition: value below is a YAML anchor
+# reference back to these four lines.
+site:
+  account:       &site_account       "<FILL IN: SLURM_ACCOUNT>"
+  partition:     &site_partition     "<FILL IN: SLURM_PARTITION>"
+  gpu_partition: &site_gpu_partition "<FILL IN: SLURM_GPU_PARTITION>"
+  email:         &site_email         "<FILL IN: YOUR_EMAIL>"
+
+cluster:
+  email:            *site_email
+  account:          *site_account
+  profile:          gpu
+  container_engine: singularity
+
+paths:
+  inputs:
+    bam:  workflow/data/bam
+    pod5: workflow/data/pod5s
+  outputs:
+    results:    results
+    logs:       logs
+    slurm_logs: slurm_logs
+  tools:
+    dorado_models: workflow/tools/dorado
+
+annotations:
+  mini:
+    reference:   resources/mini_ar_test/genome/mini_genome.fa
+    asd_genes:   resources/mini_ar_test/beds/mini_AR_genes.bed
+    cpg_islands: resources/mini_ar_test/beds/mini_CpG_island_coords.bed
+
+genome: mini
+targets:
+  - full
+  - plots
+
+experiment:
+  use_prebuilt_alignments: true                                      # pull pre-aligned AR-locus fixture BAMs instead of re-aligning
+  type:                    adaptive
+  study:                   GIAB_2023_05_public_mini
+  prefer_pod5_inputs:      false
+  mini_aligned_dir:        examples/giab_2023.05_AR_region/aligned
+  group_col:               "sex"
+  barcodes:
+    mode:   list
+    values: ["hg001", "hg002", "hg003", "hg004"]
+  sample_groups:
+    hg001: female
+    hg002: male
+    hg003: male
+    hg004: female
+
+analysis:
+  gtf_file:            resources/mini_ar_test/gtf/hg38.refGene.gtf
+  modules_of_interest: "turquoise,blue"
+  genome:              hg38
+
+tools:
+  dorado:
+    model: hac
+  clair3:
+    platform:       ont
+    model_path:     r1041_e82_400bps_sup_v410
+    enable_phasing: true
+    ctg_name:       AR_locus                                          # restricts Clair3 to the AR-locus fixture region -- only honored when genome: mini
+
+dmr:
+  caller:       dss
+  cutoff:       0.1
+  min_cpgs:     5
+  max_perms:    10
+  group_column: sex
+  group_values: [male, female]
+
+tensorqtl:
+  rename_samples:      false
+  methylation_bed_gz:  "results/dmr/03_individual_betas/DMR_individual_smoothed_methylation.bed.gz"
+  covariates_tsv:      "results/methylqtl/04_pgen/tensorqtl_covariates.txt"
+  sample_metadata_csv: ""
+  cis_window:          1000000
+  fdr:                 0.05
+  seed:                123456
+  n_pcs:                1                                             # floor plink2 accepts at this sample count
+  pca_approx_min_n:    50
+  maf_filter:          0.01
+  geno_filter:         1.0
+
+# Resources -- fixture-sized, not benchmarked against real coverage. See
+# configs/full_data/TEMPLATE_full_data.yml (or your own full-data config) for
+# production-scale values once you've run `sacct -j <jobid>
+# --format=MaxRSS,Elapsed` a few times.
+resources:
+
+  _defaults: &defaults
+    account:   *site_account
+    partition: *site_partition
+
+  basecall_pod5: {<<: *defaults, mem_gb: 8, time: "00:30:00", threads: 4}
+  merge_bams:    {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+  sort_index_bam: {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+
+  call_variants:
+    mem_gb:  32
+    time:    "01:00:00"
+    threads: 4
+    account: *site_account
+    cpu: {partition: *site_partition,     use_gpu: false, gpus: 0}
+    gpu: {partition: *site_gpu_partition, use_gpu: true,  gpus: 1}
+
+  plot_cpg_hists:    {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+  aggregate_xci_summary: {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+  plot_methylation:  {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+  modkit_pileup:     {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 4}
+  dmrseq_call_dmrs:  {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 1}
+  dss_call_dmrs:     {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 1}
+  dss_smooth_betas:  {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 4}
+  merge_vcfs:        {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  reheader_vcf:      {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  vcf_to_pgen:       {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  compute_pca_covariates: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  wgcna_modules:     {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  annotate_dmr_context: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  pathway_enrichment: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  plot_dmr_heatmap:  {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+
+  run_tensorqtl:
+    account:   *site_account
+    partition: *site_gpu_partition
+    mem_gb:    16
+    time:      "00:15:00"
+    threads:   4
+    gpus:      1

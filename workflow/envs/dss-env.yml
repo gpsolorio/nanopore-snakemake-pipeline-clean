@@ -1,0 +1,24 @@
+name: dss-env
+# bioconductor-bsseq / bioconductor-dss have no osx-arm64 build in bioconda
+# (confirmed: present for osx-64 and linux-64 up through r45, absent for
+# osx-arm64 at every version checked). On Apple Silicon this env is
+# created under CONDA_SUBDIR=osx-64 (Rosetta) -- see common.smk's
+# _resolve_conda_subdir_for_env / DSS_ENV_PLATFORM_OVERRIDE. Linux and
+# Intel Mac need no special handling; this only affects arm64 Macs.
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - r-base>=4.4
+  - r-data.table
+  - r-glue
+  - r-readxl
+  - r-optparse
+  - htslib
+  - bioconductor-dss
+  - bioconductor-bsseq
+  - bioconductor-biocparallel
+  - bioconductor-genomicranges
+  - bioconductor-iranges
+  - bioconductor-genomeinfodb

@@ -1,0 +1,25 @@
+name: pheatmap-env
+# Scope: DMR z-score heatmap plotting (plot_dmr_heatmap rule) only.
+# On Apple Silicon:
+#   CONDA_SUBDIR=osx-64 conda env create -f workflow/envs/pheatmap-env.yml
+# 
+# Needs bsseq to load the smoothed BSseq object and call getMeth(), but not
+# DSS or WGCNA -- kept separate from both so a plotting-dependency change
+# never risks the statistical-testing or module-detection envs, and vice
+# versa.
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - r-base>=4.4
+  - r-optparse
+  - r-dplyr
+  - r-pheatmap
+  - r-rcolorbrewer
+  - r-glue
+  - r-purrr
+  - r-magrittr
+  - bioconductor-bsseq
+  - bioconductor-genomicranges
+  - bioconductor-iranges

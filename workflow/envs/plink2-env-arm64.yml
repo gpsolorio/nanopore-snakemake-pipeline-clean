@@ -1,0 +1,17 @@
+name: plink2-env-arm64
+# NOTE: plink2 has no osx-arm64 build in bioconda.
+
+# On Apple Silicon, create this env with:
+#   CONDA_SUBDIR=osx-64 conda env create -f workflow/envs/plink2-env.yml
+
+# Most users should not manually create these environments. They are created
+# automatically by Snakemake when running with --use-conda. Manual creation
+# is only needed for debugging or Apple Silicon compatibility testing.
+
+# On Linux (HPC) it builds natively without this workaround.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - pandas

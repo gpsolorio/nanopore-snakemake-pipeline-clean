@@ -1,0 +1,29 @@
+name: wgcna-env
+# Scope: WGCNA co-methylation module detection (wgcna_modules rule) only.
+#
+# Duplicates DSS/bsseq from dss-env.yml intentionally -- wgcna_methylation.R
+# needs DSS::makeBSseqData (via config/utils.R::build_bsseq_from_metadata())
+# and bsseq::getMeth/BSmooth, but keeping this as its own env means a WGCNA
+# solve failure (it has a heavier, more fragile compiled dependency tree
+# than DSS/bsseq alone) can never take down dss_call_dmrs/dss_smooth_betas,
+# and vice versa. Do not merge this back into dss-env.yml.
+#
+# On Apple Silicon: CONDA_SUBDIR=osx-64 conda env create -f workflow/envs/wgcna-env.yml
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - r-base>=4.4
+  - r-data.table
+  - r-glue
+  - r-conflicted
+  - r-optparse
+  - htslib
+  - bioconductor-dss
+  - bioconductor-bsseq
+  - bioconductor-genomicranges
+  - bioconductor-iranges
+  - bioconductor-genomeinfodb
+  - r-wgcna
+  - bioconductor-matrixgenerics

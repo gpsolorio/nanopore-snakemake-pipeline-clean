@@ -1,0 +1,13 @@
+name: smk-env-linux
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - snakemake-minimal=7.32.4
+  - apptainer=1.5.2
+  - graphviz
+  - pandas
+  - openpyxl
+  - squashfuse
+  - e2fsprogs

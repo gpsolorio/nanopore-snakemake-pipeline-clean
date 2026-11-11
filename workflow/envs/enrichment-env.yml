@@ -1,0 +1,17 @@
+name: enrichment-env
+# Scope: EnrichR pathway enrichment (pathway_enrichment.R -- not yet wired
+# into the DAG as a Snakemake rule as of this writing).
+#
+# Kept separate from dmr-annotation-env.yml: enrichR pulls its own web-API
+# client dependency chain, and doesn't need annotatr/AnnotationHub at all.
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - r-base>=4.2
+  - r-optparse
+  - r-dplyr
+  - r-ggplot2
+  - r-openxlsx
+  - r-enrichr

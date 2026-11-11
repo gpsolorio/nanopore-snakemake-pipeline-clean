@@ -1,0 +1,26 @@
+name: tensorqtl-env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - scipy
+  - pyarrow
+  - cmake
+  - r-base=4.2
+  - r-essentials
+  - rpy2
+  - bioconductor-qvalue
+  - pip:
+    - pgenlib
+    - tensorqtl
+    - pandas-plink
+    - torch
+
+variables:
+  KMP_DUPLICATE_LIB_OK: "TRUE"   # silences OpenMP conflict on macOS; harmless on Linux
+  R_LIBS_USER: ""                # avoid picking up a stray ~/R user library; use conda's R only

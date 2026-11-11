@@ -1,0 +1,117 @@
+##############################################################################
+# SENSITIVE / RESTRICTED DATA — never track, even accidentally
+##############################################################################
+resources/spreadsheets/*.xlsx
+!resources/spreadsheets/README.md
+
+resources/hg38.fa*
+resources/hg38_genes.gtf
+resources/mini_ar_test/_public_build_cache/
+resources/mini_ar_test/gtf/*.gtf
+
+examples/giab_2023.05_AR_region/genome_cache/
+
+workflow/data/*.xlsx
+workflow/data/*.csv
+
+configs/old_configs/
+profiles/slurm/old_config.yaml
+
+##############################################################################
+# SNAKEMAKE RUNTIME
+##############################################################################
+.snakemake/
+*.snakemake
+
+##############################################################################
+# PIPELINE OUTPUTS (regenerable — safe to delete)
+##############################################################################
+results/
+logs/
+*.log
+*.err
+*.out
+
+##############################################################################
+# LOCALLY-BUILT TOOLS / CONTAINERS
+# (installed by setup/ scripts — see setup/README.md)
+##############################################################################
+workflow/tools/
+
+##############################################################################
+# LARGE / RAW DATA
+# NOTE: scoped to workflow/data/ specifically, NOT repo-wide, so tracked
+# curated data under resources/mini_ar_test/ and resources/mini_production/
+# is never accidentally matched (e.g. mini_genome.fa, minimap2.bam).
+##############################################################################
+workflow/data/
+
+##############################################################################
+# TOY DATASET GENERATED READS
+##############################################################################
+workflow/toy_dataset/ar_reads/
+
+##############################################################################
+# LEGACY / MOVED CONTENT
+##############################################################################
+archive/
+
+##############################################################################
+# PYTHON
+##############################################################################
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+
+##############################################################################
+# R / RSTUDIO
+##############################################################################
+.Rhistory
+.RData
+.Rproj.user/
+
+##############################################################################
+# TEMP / CACHE FILES
+##############################################################################
+*.tmp*
+*.bak
+.cache/
+.tmp/
+
+##############################################################################
+# IDEs
+##############################################################################
+.vscode/
+.idea/
+*.code-workspace
+
+##############################################################################
+# OS FILES
+##############################################################################
+.DS_Store
+Thumbs.db
+
+# Large downloaded public sequencing datasets
+examples/giab_2023.05_AR_region/
+
+
+docs/error.txt
+private/
+*.local.sh
+*.local.yml
+*_manifest.tsv
+!*.example.tsv
+*.bam
+*.bai
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.pod5
+slurm_logs/
+resources/bam/
+resources/pod5/
+configs/private/

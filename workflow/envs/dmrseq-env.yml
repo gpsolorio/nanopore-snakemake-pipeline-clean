@@ -1,0 +1,22 @@
+name: dmrseq-env
+# bioconductor-dmrseq / bioconductor-bsseq have no osx-arm64 build in
+# bioconda (same gap as dss-env.yml -- see that file for details). On
+# Apple Silicon this env must be created under CONDA_SUBDIR=osx-64
+# (Rosetta); run_local.sh exports that automatically before invoking
+# snakemake, so `bash run_local.sh ...` already covers it. If invoking
+# snakemake directly on an Apple Silicon Mac, export it yourself first:
+#   CONDA_SUBDIR=osx-64 snakemake --use-conda ...
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base=4.3
+  - bioconductor-dmrseq
+  - bioconductor-bsseq
+  - bioconductor-genomicranges
+  - bioconductor-biocparallel
+  - bioconductor-plyranges
+  - r-data.table
+  - r-dplyr
+  - r-glue

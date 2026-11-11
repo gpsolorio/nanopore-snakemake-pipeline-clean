@@ -1,0 +1,152 @@
+##############################################################################
+# Nanopore Adaptive Sequencing Pipeline — Public Mini-Data Smoke Test
+# Hardware target: HPC / SLURM cluster, CPU-only (no GPU quota/partition)
+# Dataset: GIAB 2023.05 public mini (HG001-HG004, AR-locus fixture)
+#
+# Same dataset as mini_data_public_2023_hpc_a100.yml; only cluster/resources
+# differ. The GPU sub-block under resources.call_variants and
+# resources.run_tensorqtl is kept structurally present (other rule logic
+# expects the keys to exist) but forced off, since this cluster has no GPU
+# quota to request in the first place -- requesting a gpu-a100
+# partition/gpus:1 here would likely just fail the job at submission time.
+#
+# Same profiles/slurm/config.yaml `slurm_log_dir` requirement as the A100
+# config -- see that file's header. One-time profile fix, covers both.
+#
+# Invocation:
+#   snakemake all -p \
+#       -s workflow/snakemake/nanopore_adaptive_pipeline.smk \
+#       --configfile configs/mini_data_public_2023_hpc_cpu_only.yml \
+#       --profile profiles/slurm \
+#       --use-conda
+##############################################################################
+
+site:
+  account:       &site_account       "<FILL IN: SLURM_ACCOUNT>"
+  partition:     &site_partition     "<FILL IN: SLURM_PARTITION>"
+  gpu_partition: &site_gpu_partition "<FILL IN: SLURM_GPU_PARTITION>"    # unused on this cluster; kept for structural parity
+  email:         &site_email         "<FILL IN: YOUR_EMAIL>"
+
+cluster:
+  email:            *site_email
+  account:          *site_account
+  profile:          cpu
+  container_engine: singularity
+
+paths:
+  inputs:
+    bam:  workflow/data/bam
+    pod5: workflow/data/pod5s
+  outputs:
+    results:    results
+    logs:       logs
+    slurm_logs: slurm_logs
+  tools:
+    dorado_models: workflow/tools/dorado
+
+annotations:
+  mini:
+    reference:   resources/mini_ar_test/genome/mini_genome.fa
+    asd_genes:   resources/mini_ar_test/beds/mini_AR_genes.bed
+    cpg_islands: resources/mini_ar_test/beds/mini_CpG_island_coords.bed
+
+genome: mini
+targets:
+  - full
+  - plots
+
+experiment:
+  use_prebuilt_alignments: true
+  type:                    adaptive
+  study:                   GIAB_2023_05_public_mini
+  prefer_pod5_inputs:      false
+  mini_aligned_dir:        examples/giab_2023.05_AR_region/aligned
+  group_col:               "sex"
+  barcodes:
+    mode:   list
+    values: ["hg001", "hg002", "hg003", "hg004"]
+  sample_groups:
+    hg001: female
+    hg002: male
+    hg003: male
+    hg004: female
+
+analysis:
+  gtf_file:            resources/mini_ar_test/gtf/hg38.refGene.gtf
+  modules_of_interest: "turquoise,blue"
+  genome:              hg38
+
+tools:
+  dorado:
+    model: hac
+  clair3:
+    platform:       ont
+    model_path:     r1041_e82_400bps_sup_v410
+    enable_phasing: true
+    ctg_name:       AR_locus
+
+dmr:
+  caller:       dss
+  cutoff:       0.1
+  min_cpgs:     5
+  max_perms:    10
+  group_column: sex
+  group_values: [male, female]
+
+tensorqtl:
+  rename_samples:      false
+  methylation_bed_gz:  "results/dmr/03_individual_betas/DMR_individual_smoothed_methylation.bed.gz"
+  covariates_tsv:      "results/methylqtl/04_pgen/tensorqtl_covariates.txt"
+  sample_metadata_csv: ""
+  cis_window:          1000000
+  fdr:                 0.05
+  seed:                123456
+  n_pcs:               1
+  pca_approx_min_n:    50
+  maf_filter:          0.01
+  geno_filter:         1.0
+
+# Resources -- CPU-only Clair3 is slower than GPU, so call_variants gets
+# more wall time than the A100 config (2h vs 1h). Everything else scaled
+# to 8 threads assuming a typical CPU-partition node.
+resources:
+
+  _defaults: &defaults
+    account:   *site_account
+    partition: *site_partition
+
+  basecall_pod5:  {<<: *defaults, mem_gb: 8, time: "00:30:00", threads: 8}
+  merge_bams:     {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 8}
+  sort_index_bam: {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 8}
+
+  call_variants:
+    mem_gb:  32
+    time:    "02:00:00"
+    threads: 8
+    account: *site_account
+    cpu: {partition: *site_partition, use_gpu: false, gpus: 0}
+    gpu: {partition: *site_partition, use_gpu: false, gpus: 0}     # no gpu-a100 partition here -- forced off, not just unused
+
+  plot_cpg_hists:    {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 8}
+  aggregate_xci_summary: {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 8}
+  plot_methylation:  {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 8}
+  modkit_pileup:     {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 8}
+  dmrseq_call_dmrs:  {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 1}
+  dss_call_dmrs:     {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 1}
+  dss_smooth_betas:  {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 8}
+  merge_vcfs:        {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  reheader_vcf:      {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  vcf_to_pgen:       {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  compute_pca_covariates: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  wgcna_modules:     {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  annotate_dmr_context: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  pathway_enrichment: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  plot_dmr_heatmap:  {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+
+  run_tensorqtl:
+    account:   *site_account
+    partition: *site_partition          # no gpu-a100 partition here
+    mem_gb:    8
+    time:      "00:20:00"
+    threads:   8
+    gpus:      0

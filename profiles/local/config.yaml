@@ -1,0 +1,13 @@
+cores: 8
+jobs: 8
+
+use-conda: True
+conda-frontend: conda
+conda-prefix: .snakemake/conda
+
+latency-wait: 60
+restart-times: 1
+keep-going: True
+rerun-incomplete: True
+printshellcmds: True
+scheduler: greedy

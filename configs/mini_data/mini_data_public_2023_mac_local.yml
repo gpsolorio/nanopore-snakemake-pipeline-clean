@@ -1,0 +1,163 @@
+##############################################################################
+# Nanopore Adaptive Sequencing Pipeline — Public Mini-Data Smoke Test
+# Hardware target: Mac laptop, local execution, no GPU
+# Dataset: GIAB 2023.05 public mini (HG001-HG004, AR-locus fixture)
+#
+# Requires: Docker Desktop running (Singularity does not run natively on
+# macOS, so cluster.container_engine is docker here, not singularity).
+#
+# On Apple Silicon, dss-env and plink2-env need the Rosetta workaround
+# when first created (bioconductor-dss/bsseq and plink2 have no
+# osx-arm64 build in bioconda):
+#   CONDA_SUBDIR=osx-64 conda env create -n dss-env    -f workflow/envs/dss-env.yml
+#   CONDA_SUBDIR=osx-64 conda env create -n plink2-env -f workflow/envs/plink2-env.yml
+# Try other envs (methylartist-env, etc.) without the workaround first;
+# add CONDA_SUBDIR=osx-64 only if creation fails with an unsatisfiable-env
+# error. Not needed on Intel Macs -- check with `uname -m`
+# (arm64 = needs it, x86_64 = doesn't).
+#
+# Invocation -- use the repo's run_local.sh wrapper (handles the Rosetta
+# workaround automatically on Apple Silicon, points at profiles/local):
+#   bash run_local.sh --configfile configs/mini_data_public_2023_mac_local.yml
+#
+# NOTE: run_local.sh defaults to configs/mini_data.yml if --configfile is
+# omitted -- always pass it explicitly. It also hardcodes
+# `--resources mem_gb=18 -j 2`, overriding profiles/local's own
+# cores:8/jobs:8, so only ~2 rules run concurrently here regardless of
+# what this file's per-rule mem_gb values sum to. Raise -j/--resources in
+# run_local.sh directly if you want more parallelism.
+##############################################################################
+
+# SITE — account:/partition: are inert for a local (non-SLURM) run, but
+# kept so this config could be repointed at a real cluster later without
+# restructuring it. Safe to leave placeholders unfilled for a local run.
+site:
+  account:       &site_account       "<FILL IN: SLURM_ACCOUNT>"        # unused locally
+  partition:     &site_partition     "<FILL IN: SLURM_PARTITION>"      # unused locally
+  gpu_partition: &site_gpu_partition "<FILL IN: SLURM_GPU_PARTITION>"  # unused locally
+  email:         &site_email         "<FILL IN: YOUR_EMAIL>"           # unused locally
+
+cluster:
+  email:            *site_email
+  account:          *site_account   # unused locally, harmless
+  profile:          cpu             # no GPU on a Mac -- always cpu
+  container_engine: docker          # Singularity does not run natively on macOS
+
+paths:
+  inputs:
+    bam:  workflow/data/bam
+    pod5: workflow/data/pod5s
+  outputs:
+    results:    results
+    logs:       logs
+    slurm_logs: slurm_logs
+  tools:
+    dorado_models: workflow/tools/dorado
+
+annotations:
+  mini:
+    reference:   resources/mini_ar_test/genome/mini_genome.fa
+    asd_genes:   resources/mini_ar_test/beds/mini_AR_genes.bed
+    cpg_islands: resources/mini_ar_test/beds/mini_CpG_island_coords.bed
+
+genome: mini
+targets:
+  - full
+  - plots
+
+experiment:
+  use_prebuilt_alignments: true
+  type:                    adaptive
+  study:                   GIAB_2023_05_public_mini
+  prefer_pod5_inputs:      false
+  mini_aligned_dir:        examples/giab_2023.05_AR_region/aligned
+  group_col:               "sex"
+  barcodes:
+    mode:   list
+    values: ["hg001", "hg002", "hg003", "hg004"]
+  sample_groups:
+    hg001: female
+    hg002: male
+    hg003: male
+    hg004: female
+
+analysis:
+  gtf_file:            resources/mini_ar_test/gtf/hg38.refGene.gtf
+  modules_of_interest: "turquoise,blue"
+  genome:              hg38
+
+tools:
+  dorado:
+    model: hac
+  clair3:
+    platform:       ont
+    model_path:     r1041_e82_400bps_sup_v410
+    enable_phasing: true
+    ctg_name:       AR_locus
+  plink2_path: workflow/tools/plink2/plink2   # see SITE comment above re: bioconda's missing osx-arm64 build
+
+dmr:
+  caller:       dss
+  cutoff:       0.1
+  min_cpgs:     5
+  max_perms:    10
+  group_column: sex
+  group_values: [male, female]
+
+tensorqtl:
+  rename_samples:      false
+  methylation_bed_gz:  "results/dmr/03_individual_betas/DMR_individual_smoothed_methylation.bed.gz"
+  covariates_tsv:      "results/methylqtl/04_pgen/tensorqtl_covariates.txt"
+  sample_metadata_csv: ""
+  cis_window:          1000000
+  fdr:                 0.05
+  seed:                123456
+  n_pcs:               1
+  pca_approx_min_n:    50
+  maf_filter:          0.01
+  geno_filter:         1.0
+
+# Resources -- sized for a laptop (8 cores / 16GB assumed; adjust to your
+# machine). No GPU anywhere: call_variants uses only its "cpu" sub-block,
+# run_tensorqtl.gpus stays 0.
+resources:
+
+  _defaults: &defaults
+    account:   *site_account
+    partition: *site_partition
+
+  basecall_pod5:  {<<: *defaults, mem_gb: 8, time: "00:30:00", threads: 4}
+  merge_bams:     {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+  sort_index_bam: {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+
+  call_variants:
+    mem_gb:  10          # kept below run_local.sh's mem_gb=18 cap, paired with one other concurrent job
+    time:    "01:00:00"
+    threads: 4
+    account: *site_account
+    cpu: {partition: *site_partition, use_gpu: false, gpus: 0}
+    gpu: {partition: *site_partition, use_gpu: false, gpus: 0}   # no GPU on this box -- kept structurally present, forced off
+
+  plot_cpg_hists:    {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+  aggregate_xci_summary:    {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+  plot_methylation:  {<<: *defaults, mem_gb: 8, time: "00:15:00", threads: 4}
+  modkit_pileup:     {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 4}
+  dmrseq_call_dmrs:  {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 1}
+  dss_call_dmrs:     {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 1}
+  dss_smooth_betas:  {account: *site_account, partition: *site_partition, mem_gb: 8, time: "00:15:00", threads: 4}
+  merge_vcfs:        {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  reheader_vcf:      {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  vcf_to_pgen:       {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  compute_pca_covariates: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  wgcna_modules:     {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  annotate_dmr_context: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  pathway_enrichment: {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+  plot_dmr_heatmap:  {account: *site_account, partition: *site_partition, mem_gb: 4, time: "00:10:00", threads: 1}
+
+  run_tensorqtl:
+    account:   *site_account
+    partition: *site_partition   # no GPU on this box
+    mem_gb:    4
+    time:      "00:15:00"
+    threads:   4
+    gpus:      0
