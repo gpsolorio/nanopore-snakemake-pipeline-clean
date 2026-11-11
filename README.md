@@ -176,7 +176,7 @@ public GIAB samples. Real sample manifests and cohort paths are kept outside ver
 
 ## Author
 
-<Your Name>, PhD candidate in bioinformatics, UC Davis.
+Giovani Pimentel-Solorio, PhD candidate in bioinformatics, UC Davis.
 
 ## License
 
